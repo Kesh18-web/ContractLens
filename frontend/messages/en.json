@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "LegalEase AI - Legal Document Analysis",
+    "title": "ContractLens - Legal Document Analysis",
     "description": "AI-powered legal document analysis with risk assessment and plain-language summaries"
   },
   "navigation": {
@@ -16,7 +16,7 @@
     "welcomeMessage": "Hi! Upload a legal document and ask me anything. I'll summarize, flag risky clauses, and answer questions in simple language.",
     "welcomeDescription": "Upload a legal document and ask me anything. I'll provide summaries, flag risky clauses, and answer your questions in plain language.",
     "placeholder": "Ask about clauses, risks, or request a plain-English summary…",
-    "welcomeTitle": "Welcome to LegalEase AI",
+    "welcomeTitle": "Welcome to ContractLens",
     "send": "Send",
     "processing": "Processing...",
     "askQuestion": "Ask a question",

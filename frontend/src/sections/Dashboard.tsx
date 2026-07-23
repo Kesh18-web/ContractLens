@@ -6,6 +6,8 @@ import { BarChart3 } from "lucide-react";
 import {
   useDocumentWithClauses,
   useMultipleDocumentsClauses,
+  useChatSessionsList,
+  useDeleteChatSession,
 } from "@/hooks/useDocuments";
 import { ChatInterface } from "@/components/ChatInterface";
 import { useTranslations } from "next-intl";
@@ -139,6 +141,11 @@ export const Dashboard = () => {
     })
     .filter(Boolean);
 
+  // Fetch chat sessions list for the sidebar
+  const { data: chatSessionsData } = useChatSessionsList();
+  const chatSessions = chatSessionsData?.sessions || [];
+  const deleteChatSessionMutation = useDeleteChatSession();
+
   return (
     <div className="flex h-screen w-full bg-[#0B0B0B] text-white antialiased overflow-hidden">
       {/* Left Sidebar */}
@@ -152,6 +159,11 @@ export const Dashboard = () => {
         docQuery={documentManagement.docQuery}
         onDocQueryChange={documentManagement.setDocQuery}
         onToggleDoc={documentManagement.toggleSelectDoc}
+        onDeleteDocument={documentManagement.removeDocument}
+        chatSessions={chatSessions}
+        currentChatSessionId={chatMessages.currentChatSessionId}
+        onSelectChatSession={chatMessages.selectSession}
+        onDeleteChatSession={(sessionId) => deleteChatSessionMutation.mutate(sessionId)}
         appTitle={t("app.title").split(" - ")[0]}
         newChatLabel={t("navigation.newChat")}
         uploadLabel={t("navigation.upload")}
@@ -167,7 +179,7 @@ export const Dashboard = () => {
           onOpenSidebar={() => setSidebarOpen(true)}
           onToggleRightPanel={() => setRightPanelOpen(true)}
           currentDocId={documentManagement.currentDocId}
-          appTitle="LegalEase AI"
+          appTitle="ContractLens"
         />
 
         {/* Desktop analysis panel toggle */}

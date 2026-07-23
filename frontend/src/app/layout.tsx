@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LegalEase AI - Legal Document Analysis",
+  title: "ContractLens - Legal Document Analysis",
   description: "AI-powered legal document analysis with risk assessment and plain-language summaries",
 };
 
