@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(default=False, description="Debug mode")
     ENVIRONMENT: str = Field(default="development", description="Environment name")
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
+    MOCK_MODE: bool = Field(default=True, description="Enable mock mode for running without GCP billing")
     
     # API settings
     API_V1_STR: str = Field(default="/api/v1", description="API v1 prefix")
@@ -52,7 +53,7 @@ class Settings(BaseSettings):
     
     # Vertex AI settings
     GEMINI_MODEL_NAME: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-flash-latest",
         description="Gemini model name"
     )
     VERTEX_AI_LOCATION: str = Field(default="us-central1", description="Vertex AI location")
@@ -61,7 +62,7 @@ class Settings(BaseSettings):
     GOOGLE_GENAI_API_KEY: str = Field(description="Google Generative AI API key")
     
     # Firestore settings
-    FIRESTORE_DATABASE: str = Field(default="(default)", description="Firestore database ID")
+    FIRESTORE_DATABASE: str = Field(default="default", description="Firestore database ID")
     
     # DLP settings
     DLP_ENABLED: bool = Field(default=True, description="Enable DLP API for PII detection")

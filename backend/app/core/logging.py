@@ -19,7 +19,7 @@ def setup_logging(log_level: str = "INFO") -> None:
         
         def format(self, record: logging.LogRecord) -> str:
             # Add common fields
-            record.service = "clausecompass-api"
+            record.service = "contractlens-api"
             record.version = "0.1.0"
             
             # Format the message

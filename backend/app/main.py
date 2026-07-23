@@ -1,4 +1,4 @@
-﻿"""
+"""
 ContractLens FastAPI Application Entry Point
 """
 import logging
@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health_check():
         """Health check endpoint."""
-        return {"status": "healthy", "service": "clausecompass-api"}
+        return {"status": "healthy", "service": "contractlens-api"}
     
     return app
 
