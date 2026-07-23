@@ -1,4 +1,4 @@
-﻿"""
+"""
 Question and Answer endpoints
 """
 import logging
@@ -72,6 +72,7 @@ async def _generate_and_store_embeddings(
 
 
 
+@router.post("/ask", response_model=AnswerResponse)
 async def ask_question(
     request: QuestionRequest,
     language: SupportedLanguage = SupportedLanguage.ENGLISH,
@@ -170,117 +171,66 @@ async def ask_question(
                 )
             )
         
-        # 1. Verify document exists and get its clauses (with caching)
-        logger.info(f"Fetching clauses for document: {request.doc_id}")
+        # 1. Fetch clauses if a valid doc_id is provided
+        clauses = []
+        relevant_clauses = []
+        has_doc_context = bool(request.doc_id and request.doc_id.strip())
         
-        # Check cache first
-        cache_key = CacheKeys.document_clauses(request.doc_id)
-        clauses = await cache_service.get(cache_key)
-        
-        if clauses is None:
-            # Cache miss - fetch from Firestore
-            logger.info(f"Cache miss for document clauses: {request.doc_id}")
-            clauses = await firestore_client.get_document_clauses(request.doc_id)
+        if has_doc_context:
+            logger.info(f"Fetching clauses for document: {request.doc_id}")
+            cache_key = CacheKeys.document_clauses(request.doc_id)
+            clauses = await cache_service.get(cache_key)
             
-            # Cache the result for future requests (cache for 30 minutes)
-            if clauses:
-                await cache_service.set(cache_key, clauses, ttl=1800)
-                logger.info(f"Cached {len(clauses)} clauses for document: {request.doc_id}")
-        else:
-            logger.info(f"Cache hit for document clauses: {request.doc_id} ({len(clauses)} clauses)")
-        
-        if not clauses:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"No clauses found for document {request.doc_id}"
-            )
-        
-        # 2. Filter clauses that have embeddings (should be pre-generated during document processing)
-        clauses_with_embeddings = [
-            clause for clause in clauses 
-            if clause.get("embedding") and len(clause.get("embedding", [])) > 0
-        ]
-        
-        if not clauses_with_embeddings:
-            # Embeddings should have been generated during document processing
-            # If they're missing, this indicates a processing failure or incomplete pipeline
-            logger.warning(f"No embeddings found for document {request.doc_id}. Document may be incompletely processed.")
-            
-            # Check document status to understand why embeddings are missing
-            document = await firestore_client.get_document(request.doc_id)
-            if document and document.get("status") != "completed":
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Document is not fully processed yet. Current status: {document.get('status', 'unknown')}. Please wait for processing to complete."
-                )
-            
-            # If document is marked complete but missing embeddings, try to generate them as fallback
-            logger.warning("Document marked as complete but missing embeddings. Generating embeddings as fallback.")
-            try:
-                await _generate_and_store_embeddings(
-                    firestore_client, 
-                    embeddings_service, 
-                    request.doc_id, 
-                    clauses
-                )
-                # Reload clauses with embeddings
+            if clauses is None:
+                logger.info(f"Cache miss for document clauses: {request.doc_id}")
                 clauses = await firestore_client.get_document_clauses(request.doc_id)
-                clauses_with_embeddings = [
-                    clause for clause in clauses 
-                    if clause.get("embedding") and len(clause.get("embedding", [])) > 0
-                ]
-            except Exception as fallback_error:
-                logger.error(f"Fallback embeddings generation failed: {fallback_error}")
-                raise HTTPException(
-                    status_code=500,
-                    detail="Document processing is incomplete. Embeddings are missing and could not be generated. Please re-upload the document."
-                )
+                if clauses:
+                    await cache_service.set(cache_key, clauses, ttl=1800)
+            else:
+                logger.info(f"Cache hit for document clauses: {request.doc_id} ({len(clauses)} clauses)")
         
-        if not clauses_with_embeddings:
-            raise HTTPException(
-                status_code=500,
-                detail="No clauses with embeddings available for similarity search"
-            )
-        
-        # 3. Find most relevant clauses using vector similarity
-        logger.info(f"Searching {len(clauses_with_embeddings)} clauses for relevance")
-        relevant_clauses = await embeddings_service.search_similar_clauses(
-            question=request.question,
-            clause_embeddings=clauses_with_embeddings,
-            top_k=5,  # Get top 5 most relevant clauses
-            min_similarity=0.2  # Minimum similarity threshold
-        )
-        
-        if not relevant_clauses:
-            # No relevant clauses found, return informative response
-            answer_text = "I couldn't find any clauses in this document that relate to your question. Please try rephrasing your question or ask about different aspects of the document."
+        if has_doc_context and clauses:
+            # 2. Filter clauses that have embeddings
+            clauses_with_embeddings = [
+                clause for clause in clauses 
+                if clause.get("embedding") and len(clause.get("embedding", [])) > 0
+            ]
             
-            # Add to chat session if applicable (background task)
-            if chat_session_id:
-                background_tasks.add_task(
-                    chat_session_service.add_message,
-                    chat_session_id,
-                    AddMessageRequest(
-                        role=MessageRole.ASSISTANT,
-                        content=answer_text,
-                        metadata={"no_relevant_clauses": True, "doc_id": request.doc_id}
+            if not clauses_with_embeddings:
+                logger.warning(f"No embeddings found for document {request.doc_id}. Generating fallback embeddings.")
+                try:
+                    await _generate_and_store_embeddings(
+                        firestore_client, 
+                        embeddings_service, 
+                        request.doc_id, 
+                        clauses
                     )
-                )
+                    clauses = await firestore_client.get_document_clauses(request.doc_id)
+                    clauses_with_embeddings = [
+                        clause for clause in clauses 
+                        if clause.get("embedding") and len(clause.get("embedding", [])) > 0
+                    ]
+                except Exception as fallback_error:
+                    logger.error(f"Fallback embeddings generation failed: {fallback_error}")
+                    clauses_with_embeddings = clauses
             
-            return AnswerResponse(
-                answer=answer_text,
-                used_clause_ids=[],
-                confidence=0.0,
-                sources=[],
-                chat_session_id=chat_session_id,
-                conversation_context_used=conversation_context_used,
-                detected_language=detected_language,
-                response_language=response_language,
-                language_detection_confidence=language_detection_confidence,
-                detection_method=detection_method
-            )
-        
-        logger.info(f"Found {len(relevant_clauses)} relevant clauses")
+            # 3. Find most relevant clauses using vector similarity
+            try:
+                relevant_clauses = await embeddings_service.search_similar_clauses(
+                    question=request.question,
+                    clause_embeddings=clauses_with_embeddings,
+                    top_k=5,
+                    min_similarity=0.1
+                )
+            except Exception as e:
+                logger.warning(f"Similarity search failed ({e}), using raw document clauses as context")
+                relevant_clauses = clauses[:5]
+            
+            if not relevant_clauses:
+                relevant_clauses = clauses[:5]
+        else:
+            logger.info("Direct LLM chat mode: No document context attached.")
+            relevant_clauses = []
         
         # 4. Use Gemini for grounded Q&A with conversation context
         logger.info("Generating answer using Gemini")
@@ -339,6 +289,13 @@ async def ask_question(
                         "conversation_context_used": conversation_context_used
                     }
                 )
+            )
+            background_tasks.add_task(
+                _maybe_update_session_title,
+                chat_session_service,
+                gemini_client,
+                chat_session_id,
+                request.question
             )
         
         return AnswerResponse(
@@ -750,3 +707,19 @@ async def clear_cache(
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear cache")
+
+
+async def _maybe_update_session_title(
+    chat_session_service,
+    gemini_client,
+    session_id: str,
+    question: str
+) -> None:
+    try:
+        session = await chat_session_service.get_session(session_id)
+        if session and (not session.title or session.title.startswith("Chat ") or session.title == "New Chat"):
+            title = await gemini_client.generate_chat_title(question)
+            if title:
+                await chat_session_service.update_session_title(session_id, title)
+    except Exception as e:
+        logger.warning(f"Session title auto-generation failed: {e}")
