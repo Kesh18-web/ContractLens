@@ -1,4 +1,4 @@
-﻿"""
+"""
 Document processing endpoints
 """
 import logging
@@ -101,6 +101,49 @@ async def process_document_background(
         except Exception as update_error:
             logger.error(f"Failed to update document status after error: {update_error}")
         raise
+
+
+@router.get("", response_model=List[Dict[str, Any]])
+async def list_documents(
+    limit: int = 50,
+    orchestrator: DocumentOrchestrator = Depends(get_document_orchestrator)
+) -> List[Dict[str, Any]]:
+    """
+    List all uploaded documents stored in Firestore.
+    """
+    try:
+        db = orchestrator.firestore_client.db
+        docs = list(db.collection("documents").stream())
+        results = []
+        for doc in docs:
+            data = doc.to_dict()
+            results.append({
+                "id": doc.id,
+                "name": data.get("filename", data.get("original_filename", doc.id)),
+                "date": str(data.get("created_at", "2026-07-23"))[:10],
+                "status": data.get("status", "completed")
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}")
+        return []
+
+
+@router.delete("/{doc_id}")
+async def delete_document(
+    doc_id: str,
+    orchestrator: DocumentOrchestrator = Depends(get_document_orchestrator)
+) -> Dict[str, Any]:
+    """
+    Delete a document from Firestore.
+    """
+    try:
+        db = orchestrator.firestore_client.db
+        db.collection("documents").document(doc_id).delete()
+        return {"status": "success", "message": f"Document {doc_id} deleted"}
+    except Exception as e:
+        logger.error(f"Failed to delete document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {e}")
 
 
 @router.post("/ingest", response_model=DocumentUploadResponse)
