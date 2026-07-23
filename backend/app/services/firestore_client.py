@@ -9,13 +9,162 @@ from uuid import uuid4
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 from google.api_core.exceptions import GoogleAPIError, NotFound
-
 from app.core.config import get_settings
 from app.core.logging import get_logger, LogContext, log_execution_time
 from app.models.document import DocumentStatus, RiskLevel
 
 logger = get_logger(__name__)
 
+
+import json
+import os
+from threading import Lock
+
+class LocalJSONDb:
+    _lock = Lock()
+    _db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "mock_db.json")
+
+    @classmethod
+    def _read_db(cls) -> dict:
+        with cls._lock:
+            if not os.path.exists(cls._db_path):
+                return {"documents": {}, "clauses": {}, "sessions": {}, "negotiations": {}}
+            try:
+                with open(cls._db_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                return {"documents": {}, "clauses": {}, "sessions": {}, "negotiations": {}}
+
+    @classmethod
+    def _write_db(cls, data: dict):
+        with cls._lock:
+            try:
+                with open(cls._db_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, default=str)
+            except Exception as e:
+                pass
+
+def _nested_set(dic, path, value):
+    current = dic
+    for step in path[:-1]:
+        if step not in current:
+            current[step] = {}
+        elif not isinstance(current[step], dict):
+            current[step] = {}
+        current = current[step]
+    if path:
+        current[path[-1]] = value
+
+def _nested_get(dic, path):
+    current = dic
+    for step in path:
+        if not isinstance(current, dict) or step not in current:
+            return None
+        current = current[step]
+    return current
+
+def _nested_delete(dic, path):
+    current = dic
+    for step in path[:-1]:
+        if not isinstance(current, dict) or step not in current:
+            return False
+        current = current[step]
+    if path and isinstance(current, dict) and path[-1] in current:
+        del current[path[-1]]
+        return True
+    return False
+
+class MockDocumentSnapshot:
+    def __init__(self, doc_id, data):
+        self.id = doc_id
+        self._data = data
+        self.exists = data is not None
+
+    def to_dict(self):
+        return self._data
+
+    def get(self, key, default=None):
+        if not self._data:
+            return default
+        return self._data.get(key, default)
+
+class MockDocumentReference:
+    def __init__(self, db_path, collection_name, document_id):
+        self.db_path = db_path
+        self.collection_name = collection_name
+        self.id = document_id
+        self.document_id = document_id
+
+    def set(self, data, merge=False):
+        db = LocalJSONDb._read_db()
+        _nested_set(db, self.db_path + [self.collection_name, self.id], data)
+        LocalJSONDb._write_db(db)
+        return True
+
+    def get(self):
+        db = LocalJSONDb._read_db()
+        data = _nested_get(db, self.db_path + [self.collection_name, self.id])
+        return MockDocumentSnapshot(self.id, data)
+
+    def update(self, data):
+        db = LocalJSONDb._read_db()
+        path = self.db_path + [self.collection_name, self.id]
+        current_data = _nested_get(db, path)
+        if current_data is None:
+            current_data = {}
+        elif not isinstance(current_data, dict):
+            current_data = {}
+        current_data.update(data)
+        _nested_set(db, path, current_data)
+        LocalJSONDb._write_db(db)
+        return True
+
+    def delete(self):
+        db = LocalJSONDb._read_db()
+        path = self.db_path + [self.collection_name, self.id]
+        result = _nested_delete(db, path)
+        LocalJSONDb._write_db(db)
+        return result
+
+    def collection(self, subcollection_name):
+        new_path = self.db_path + [self.collection_name, self.id]
+        return MockCollectionReference(new_path, subcollection_name)
+
+class MockCollectionReference:
+    def __init__(self, db_path, collection_name):
+        self.db_path = db_path
+        self.collection_name = collection_name
+
+    def document(self, document_id=None):
+        if document_id is None:
+            document_id = str(uuid4())
+        return MockDocumentReference(self.db_path, self.collection_name, document_id)
+
+    def where(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return self
+
+    def limit(self, *args, **kwargs):
+        return self
+
+    def stream(self):
+        db = LocalJSONDb._read_db()
+        col_dict = _nested_get(db, self.db_path + [self.collection_name])
+        if not isinstance(col_dict, dict):
+            return []
+        docs = []
+        for doc_id, doc_data in col_dict.items():
+            docs.append(MockDocumentSnapshot(doc_id, doc_data))
+        return docs
+
+class MockFirestoreDb:
+    def __init__(self):
+        self.db_path = []
+
+    def collection(self, collection_name):
+        return MockCollectionReference(self.db_path, collection_name)
 
 class FirestoreError(Exception):
     """Custom exception for Firestore operations."""
@@ -34,6 +183,8 @@ class FirestoreClient:
     @property
     def db(self) -> firestore.Client:
         """Lazy initialization of Firestore client with connection pooling."""
+        if self.settings.MOCK_MODE:
+            return MockFirestoreDb()
         if self._db is None or not self._initialized:
             try:
                 # Configure client with connection pooling for better performance
@@ -52,6 +203,8 @@ class FirestoreClient:
     
     def close(self):
         """Close the Firestore client connection."""
+        if self.settings.MOCK_MODE:
+            return
         if self._client:
             self._client.close()
             self._client = None
@@ -83,6 +236,29 @@ class FirestoreClient:
         Returns:
             Created document data
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Creating document record for {doc_id}")
+            created_at = datetime.utcnow().isoformat()
+            document_data = {
+                "doc_id": doc_id,
+                "filename": filename,
+                "file_size": file_size,
+                "page_count": page_count,
+                "status": DocumentStatus.PROCESSING.value,
+                "language": language,
+                "created_at": created_at,
+                "updated_at": created_at,
+                "processed_at": None,
+                "masked": False,
+                "session_id": session_id,
+                "clause_count": 0,
+                "processing_metadata": {}
+            }
+            db = LocalJSONDb._read_db()
+            db["documents"][doc_id] = document_data
+            LocalJSONDb._write_db(db)
+            return document_data
+
         with LogContext(logger, doc_id=doc_id, filename=filename):
             logger.info("Creating document record")
             
@@ -123,6 +299,11 @@ class FirestoreClient:
         Returns:
             Document data or None if not found
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Getting document {doc_id}")
+            db = LocalJSONDb._read_db()
+            return db["documents"].get(doc_id)
+
         try:
             doc_ref = self.db.collection("documents").document(doc_id)
             doc = doc_ref.get()
@@ -153,6 +334,26 @@ class FirestoreClient:
         Returns:
             True if update successful
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Updating status of document {doc_id} to {status.value}")
+            db = LocalJSONDb._read_db()
+            if doc_id not in db["documents"]:
+                logger.error(f"[MOCK] Document {doc_id} not found for status update")
+                raise FirestoreError(f"Document {doc_id} not found for status update")
+            
+            update_data = {
+                "status": status.value,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            if status == DocumentStatus.COMPLETED:
+                update_data["processed_at"] = datetime.utcnow().isoformat()
+            if metadata:
+                update_data.update(metadata)
+            
+            db["documents"][doc_id].update(update_data)
+            LocalJSONDb._write_db(db)
+            return True
+
         with LogContext(logger, doc_id=doc_id, status=status.value):
             try:
                 doc_ref = self.db.collection("documents").document(doc_id)
@@ -203,6 +404,49 @@ class FirestoreClient:
         Returns:
             List of created clause IDs
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Creating {len(clauses_data)} clauses for document {doc_id}")
+            db = LocalJSONDb._read_db()
+            created_at = datetime.utcnow().isoformat()
+            clause_ids = []
+            
+            # Reset existing clauses if re-processing
+            doc_clauses = []
+            
+            for i, clause_data in enumerate(clauses_data):
+                clause_id = clause_data.get("clause_id", f"{doc_id}_clause_{i}")
+                firestore_clause_data = {
+                    "clause_id": clause_id,
+                    "doc_id": doc_id,
+                    "order": clause_data.get("order", i + 1),
+                    "original_text": clause_data.get("original_text", ""),
+                    "summary": clause_data.get("summary", ""),
+                    "category": clause_data.get("category", "Other"),
+                    "risk_level": clause_data.get("risk_level", "moderate"),
+                    "needs_review": clause_data.get("needs_review", False),
+                    "readability_metrics": clause_data.get("readability_metrics", {}),
+                    "negotiation_tip": clause_data.get("negotiation_tip"),
+                    "language": clause_data.get("language", "en"),
+                    "confidence": clause_data.get("confidence", 0.5),
+                    "processing_method": clause_data.get("processing_method", "unknown"),
+                    "created_at": created_at,
+                    "updated_at": created_at,
+                    "embedding": clause_data.get("embedding"),
+                    "metadata": clause_data.get("metadata", {})
+                }
+                doc_clauses.append(firestore_clause_data)
+                clause_ids.append(clause_id)
+            
+            db["clauses"][doc_id] = doc_clauses
+            
+            if doc_id in db["documents"]:
+                db["documents"][doc_id]["clause_count"] = len(clause_ids)
+                db["documents"][doc_id]["updated_at"] = created_at
+                
+            LocalJSONDb._write_db(db)
+            logger.info(f"[MOCK] Created {len(clause_ids)} clause records")
+            return clause_ids
+
         with LogContext(logger, doc_id=doc_id, clause_count=len(clauses_data)):
             logger.info("Creating clause records")
             
@@ -270,6 +514,16 @@ class FirestoreClient:
         Returns:
             List of clause data dictionaries
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Getting clauses for document {doc_id}")
+            db = LocalJSONDb._read_db()
+            clauses = db["clauses"].get(doc_id, [])
+            try:
+                clauses.sort(key=lambda x: x.get(order_by, 0))
+            except Exception:
+                pass
+            return clauses
+
         try:
             doc_ref = self.db.collection("documents").document(doc_id)
             clauses_collection = doc_ref.collection("clauses")
@@ -301,6 +555,15 @@ class FirestoreClient:
         Returns:
             Clause data or None if not found
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Getting clause {clause_id} for doc {doc_id}")
+            db = LocalJSONDb._read_db()
+            clauses = db["clauses"].get(doc_id, [])
+            for c in clauses:
+                if c.get("clause_id") == clause_id:
+                    return c
+            return None
+
         try:
             doc_ref = self.db.collection("documents").document(doc_id)
             clause_ref = doc_ref.collection("clauses").document(clause_id)
@@ -342,6 +605,22 @@ class FirestoreClient:
         Raises:
             FirestoreError: If any batch fails to commit
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Updating clause embeddings for doc {doc_id}")
+            db = LocalJSONDb._read_db()
+            clauses = db["clauses"].get(doc_id, [])
+            updated = False
+            for c in clauses:
+                cid = c.get("clause_id")
+                if cid in embeddings_data:
+                    c["embedding"] = embeddings_data[cid]
+                    c["updated_at"] = datetime.utcnow().isoformat()
+                    updated = True
+            if updated:
+                db["clauses"][doc_id] = clauses
+                LocalJSONDb._write_db(db)
+            return True
+
         MAX_WRITES_PER_BATCH = 50
         
         with LogContext(logger, doc_id=doc_id, embedding_count=len(embeddings_data)):
@@ -448,6 +727,17 @@ class FirestoreClient:
         Returns:
             List of clauses with specified risk level
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Getting clauses by risk level {risk_level.value} for doc {doc_id}")
+            db = LocalJSONDb._read_db()
+            clauses = db["clauses"].get(doc_id, [])
+            filtered = [c for c in clauses if c.get("risk_level") == risk_level.value]
+            try:
+                filtered.sort(key=lambda x: x.get("order", 0))
+            except Exception:
+                pass
+            return filtered
+
         try:
             doc_ref = self.db.collection("documents").document(doc_id)
             clauses_collection = doc_ref.collection("clauses")
@@ -479,6 +769,17 @@ class FirestoreClient:
         Returns:
             List of clauses needing review
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Getting clauses needing review for doc {doc_id}")
+            db = LocalJSONDb._read_db()
+            clauses = db["clauses"].get(doc_id, [])
+            filtered = [c for c in clauses if c.get("needs_review") is True]
+            try:
+                filtered.sort(key=lambda x: x.get("order", 0))
+            except Exception:
+                pass
+            return filtered
+
         try:
             doc_ref = self.db.collection("documents").document(doc_id)
             clauses_collection = doc_ref.collection("clauses")
@@ -584,6 +885,23 @@ class FirestoreClient:
         Returns:
             Session ID
         """
+        if self.settings.MOCK_MODE:
+            if session_id is None:
+                session_id = str(uuid4())
+            logger.info(f"[MOCK] Creating session {session_id}")
+            session_data = {
+                "session_id": session_id,
+                "created_at": datetime.utcnow().isoformat(),
+                "last_activity": datetime.utcnow().isoformat(),
+                "locale": "en",  # Default locale
+                "document_count": 0,
+                "qa_count": 0
+            }
+            db = LocalJSONDb._read_db()
+            db["sessions"][session_id] = session_data
+            LocalJSONDb._write_db(db)
+            return session_id
+
         if session_id is None:
             session_id = str(uuid4())
         
@@ -617,6 +935,15 @@ class FirestoreClient:
         Returns:
             True if update successful
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Updating session activity for {session_id}")
+            db = LocalJSONDb._read_db()
+            if session_id in db["sessions"]:
+                db["sessions"][session_id]["last_activity"] = datetime.utcnow().isoformat()
+                LocalJSONDb._write_db(db)
+                return True
+            return False
+
         try:
             session_ref = self.db.collection("sessions").document(session_id)
             session_ref.update({
@@ -661,6 +988,15 @@ class FirestoreClient:
         Returns:
             True if successful
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Saving negotiation history for {negotiation_id}")
+            db = LocalJSONDb._read_db()
+            history_data["created_at"] = history_data.get("created_at") or datetime.utcnow().isoformat()
+            history_data["updated_at"] = datetime.utcnow().isoformat()
+            db["negotiations"][negotiation_id] = history_data
+            LocalJSONDb._write_db(db)
+            return True
+
         with LogContext(logger, negotiation_id=negotiation_id):
             logger.info("Saving negotiation history")
             
@@ -700,6 +1036,23 @@ class FirestoreClient:
         Returns:
             List of negotiation history entries
         """
+        if self.settings.MOCK_MODE:
+            logger.info(f"[MOCK] Getting negotiation history for doc {doc_id}")
+            db = LocalJSONDb._read_db()
+            history = []
+            for nid, data in db["negotiations"].items():
+                if data.get("doc_id") == doc_id:
+                    if not clause_id or data.get("clause_id") == clause_id:
+                        entry = data.copy()
+                        entry["negotiation_id"] = nid
+                        history.append(entry)
+            
+            try:
+                history.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            except Exception:
+                pass
+            return history
+
         with LogContext(logger, doc_id=doc_id, clause_id=clause_id):
             logger.info("Retrieving negotiation history")
             
@@ -747,6 +1100,9 @@ class FirestoreClient:
         Returns:
             True if Firestore is healthy
         """
+        if self.settings.MOCK_MODE:
+            return True
+
         try:
             # Simple read operation to test connectivity
             collections = self.db.collections()

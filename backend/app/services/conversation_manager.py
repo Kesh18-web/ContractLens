@@ -1,4 +1,4 @@
-﻿"""
+"""
 Chat Session Service for managing conversation memory and document context
 """
 import logging
@@ -402,6 +402,21 @@ class ChatSessionService:
             
         except Exception as e:
             logger.error(f"Failed to archive session {session_id}: {e}")
+            return False
+
+    async def update_session_title(self, session_id: str, title: str) -> bool:
+        """Update session title in Firestore."""
+        try:
+            db = self.firestore_client.db
+            session_ref = db.collection(self.sessions_collection).document(session_id)
+            session_ref.update({
+                "title": title,
+                "updated_at": datetime.utcnow()
+            })
+            logger.info(f"Updated title for session {session_id}: '{title}'")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update session title for {session_id}: {e}")
             return False
     
     async def _get_documents_metadata(

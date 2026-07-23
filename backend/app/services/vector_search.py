@@ -25,8 +25,9 @@ class EmbeddingsService:
     
     def __init__(self):
         self.settings = get_settings()
-        genai.configure(api_key=self.settings.GOOGLE_GENAI_API_KEY)  # type: ignore
-        self.model_name = "models/text-embedding-004"
+        if not self.settings.MOCK_MODE:
+            genai.configure(api_key=self.settings.GOOGLE_GENAI_API_KEY)  # type: ignore
+        self.model_name = "models/gemini-embedding-001"
         
     def _log_execution_time(self, operation: str, start_time: float) -> None:
         """Helper method to log execution time."""
@@ -46,6 +47,9 @@ class EmbeddingsService:
         Raises:
             EmbeddingsError: If embedding generation fails
         """
+        if self.settings.MOCK_MODE:
+            return [0.1] * 768
+
         start_time = time.time()
         
         try:
@@ -96,6 +100,9 @@ class EmbeddingsService:
         Raises:
             EmbeddingsError: If all embeddings fail or critical error occurs
         """
+        if self.settings.MOCK_MODE:
+            return [[0.1] * 768 for _ in texts]
+
         start_time = time.time()
         
         try:

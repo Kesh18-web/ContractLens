@@ -1,4 +1,4 @@
-﻿"""
+"""
 Advanced Language Detection Service for Automatic Language Recognition
 Implements multi-tier detection using FastText + Gemini + Google Cloud Translation API
 """
@@ -110,6 +110,10 @@ class LanguageDetectionService:
 
     async def _initialize_google_translate(self):
         """Initialize Google Cloud Translation client"""
+        if self.settings.MOCK_MODE:
+            logger.info("Skipping Google Translate API client initialization (Mock Mode)")
+            return
+
         try:
             from google.cloud import translate_v2 as translate
             self._google_translate_client = translate.Client()
