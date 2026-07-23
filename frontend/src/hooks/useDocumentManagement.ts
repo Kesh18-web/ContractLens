@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { documentApi } from "@/lib/api";
 
 export interface Document {
   id: string;
@@ -18,6 +19,7 @@ export interface UseDocumentManagementReturn {
   clearContext: () => void;
   addDocument: (doc: Document) => void;
   addDocuments: (docs: Document[]) => void;
+  removeDocument: (id: string) => void;
   setSelectedDocs: (docs: string[]) => void;
   setCurrentDocId: (id: string | null) => void;
   updateDocumentStatus: (docId: string, status: string) => void;
@@ -31,6 +33,15 @@ export const useDocumentManagement = (): UseDocumentManagementReturn => {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [docQuery, setDocQuery] = useState("");
+
+  // Load uploaded documents from Firestore on mount
+  useEffect(() => {
+    documentApi.listDocuments().then((docs) => {
+      if (docs && docs.length > 0) {
+        setRecentDocs(docs);
+      }
+    });
+  }, []);
 
   // Filter documents based on search query
   const filteredDocs = useMemo(() => {
@@ -61,6 +72,13 @@ export const useDocumentManagement = (): UseDocumentManagementReturn => {
     setRecentDocs((prev) => [...docs, ...prev]);
   }, []);
 
+  // Remove document
+  const removeDocument = useCallback(async (id: string) => {
+    setRecentDocs((prev) => prev.filter((d) => d.id !== id));
+    setSelectedDocs((prev) => prev.filter((x) => x !== id));
+    await documentApi.deleteDocument(id);
+  }, []);
+
   // Update document status
   const updateDocumentStatus = useCallback((docId: string, status: string) => {
     setRecentDocs((prev) =>
@@ -88,6 +106,7 @@ export const useDocumentManagement = (): UseDocumentManagementReturn => {
     clearContext,
     addDocument,
     addDocuments,
+    removeDocument,
     setSelectedDocs,
     setCurrentDocId,
     updateDocumentStatus,

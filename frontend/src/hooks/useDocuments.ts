@@ -597,11 +597,20 @@ export function useChatAwareAskQuestion() {
         queryKey: documentQueryKeys.qaHistory(variables.doc_id),
       });
 
-      // If this was part of a chat session, invalidate that session too
+      // If this was part of a chat session, invalidate that session and the sessions list
       if (variables.chat_session_id) {
         queryClient.invalidateQueries({
           queryKey: chatSessionQueryKeys.session(variables.chat_session_id),
         });
+        queryClient.invalidateQueries({
+          queryKey: chatSessionQueryKeys.lists(),
+        });
+        // Backend task updates session title in Firestore (~1-2s delay); refetch lists to update sidebar title live
+        setTimeout(() => {
+          queryClient.invalidateQueries({
+            queryKey: chatSessionQueryKeys.lists(),
+          });
+        }, 2200);
       }
     },
   });

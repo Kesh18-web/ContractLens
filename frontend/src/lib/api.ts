@@ -136,6 +136,7 @@ export interface QuestionRequest {
   session_id?: string;
   chat_session_id?: string;
   use_conversation_memory?: boolean;
+  language_override?: string;
 }
 
 export interface SourceCitation {
@@ -298,6 +299,30 @@ export interface ChatSessionListResponse {
 // ========================================
 
 export const documentApi = {
+  /**
+   * List all uploaded documents
+   */
+  async listDocuments(): Promise<Array<{ id: string; name: string; date: string; status?: string }>> {
+    try {
+      const response = await apiClient.get("/api/v1/documents");
+      return response.data;
+    } catch (err) {
+      console.error("Failed to fetch documents:", err);
+      return [];
+    }
+  },
+
+  /**
+   * Delete an uploaded document
+   */
+  async deleteDocument(docId: string): Promise<void> {
+    try {
+      await apiClient.delete(`/api/v1/documents/${docId}`);
+    } catch (err) {
+      console.error("Failed to delete document:", err);
+    }
+  },
+
   /**
    * Upload a document for processing
    */
@@ -477,11 +502,12 @@ export const chatSessionApi = {
    * Get a specific chat session with full conversation history
    */
   async getSession(sessionId: string): Promise<ChatSession> {
-    const response: AxiosResponse<ChatSession> = await apiClient.get(
+    const response = await apiClient.get(
       `/api/v1/chat/sessions/${sessionId}`
     );
 
-    return response.data;
+    const data = response.data as any;
+    return data.session || data;
   },
 
   /**

@@ -1,10 +1,12 @@
 import { useState, useCallback } from "react";
+import { useLocale } from "@/providers/LocaleProvider";
 import {
   useChatAwareAskQuestion,
   useCreateChatSession,
   useUpdateDocumentContext,
 } from "./useDocuments";
 import { ChatMessage } from "@/components/ChatInterface";
+import { chatSessionApi } from "@/lib/api";
 
 export interface UseChatMessagesParams {
   currentDocId: string | null;
@@ -27,6 +29,7 @@ export interface UseChatMessagesReturn {
     feedback: "positive" | "negative"
   ) => void;
   handleRetry: (messageId: string) => void;
+  selectSession: (sessionId: string) => Promise<void>;
   newChat: () => Promise<void>;
   addMessage: (message: ChatMessage) => void;
   updateProcessingMessage: (status: string, clauseCount?: number) => void;
@@ -42,6 +45,7 @@ export const useChatMessages = ({
   welcomeMessage,
   newChatMessage,
 }: UseChatMessagesParams): UseChatMessagesReturn => {
+  const { locale } = useLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "m1",
@@ -95,6 +99,34 @@ export const useChatMessages = ({
     }
   };
 
+  const selectSession = async (sessionId: string) => {
+    try {
+      const session = await chatSessionApi.getSession(sessionId);
+      setCurrentChatSessionId(session.session_id);
+      if (session.messages && session.messages.length > 0) {
+        const formattedMsgs: ChatMessage[] = session.messages.map((m: any, idx: number) => ({
+          id: m.message_id || `m-${idx}`,
+          role: m.role === "user" ? "user" : "assistant",
+          content: m.content,
+          timestamp: new Date(m.created_at || m.timestamp || Date.now()),
+          sources: m.sources,
+        }));
+        setMessages(formattedMsgs);
+      } else {
+        setMessages([
+          {
+            id: "m-welcome",
+            role: "assistant",
+            content: welcomeMessage,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error("Failed to load session:", err);
+    }
+  };
+
   const sendMessage = async (content: string) => {
     // Create user message immediately for optimistic UI
     const userMsg: ChatMessage = {
@@ -107,25 +139,13 @@ export const useChatMessages = ({
     // Add user message immediately (optimistic update)
     setMessages((prev) => [...prev, userMsg]);
 
-    // Check if we have a document selected
-    if (!currentDocId) {
-      const errorMsg: ChatMessage = {
-        id: `error-${Date.now()}`,
-        role: "assistant",
-        content:
-          "Please upload and select a document first before asking questions.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-      return;
-    }
-
     // Create loading message for assistant response
     const loadingMsg: ChatMessage = {
       id: `loading-${Date.now()}`,
       role: "assistant",
-      content:
-        "✨ Analyzing your question and searching through the document...",
+      content: currentDocId
+        ? "✨ Analyzing your question and searching through the document..."
+        : "✨ Analyzing your question...",
       isLoading: true,
       timestamp: new Date(),
     };
@@ -140,7 +160,11 @@ export const useChatMessages = ({
         try {
           const newSession = await createChatSessionMutation.mutateAsync({
             selected_document_ids:
-              selectedDocs.length > 0 ? selectedDocs : [currentDocId],
+              selectedDocs.length > 0
+                ? selectedDocs
+                : currentDocId
+                ? [currentDocId]
+                : [],
           });
           sessionId = newSession.session_id;
           setCurrentChatSessionId(sessionId);
@@ -180,11 +204,12 @@ export const useChatMessages = ({
 
       // Ask the question using the chat-aware API
       const response = await askQuestionMutation.mutateAsync({
-        doc_id: currentDocId,
+        doc_id: currentDocId || "",
         question: enhancedQuestion,
         session_id: `session-${Date.now()}`, // Keep for backward compatibility
         chat_session_id: sessionId || undefined,
         use_conversation_memory: !!sessionId, // Use memory if we have a session
+        language_override: locale,
       });
 
       // Format the response with sources
@@ -310,6 +335,7 @@ export const useChatMessages = ({
     sendMessage,
     handleFeedback,
     handleRetry,
+    selectSession,
     newChat,
     addMessage,
     updateProcessingMessage,
