@@ -73,6 +73,7 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
   const t = useTranslations();
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [tooltipHovered, setTooltipHovered] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const leaveTimerRef = useRef<number | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
@@ -334,7 +335,10 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
           </div>
 
           {/* Heatmap rows */}
-          {heatmapData.categories.map((category) => (
+          {(showAllCategories
+            ? heatmapData.categories
+            : heatmapData.categories.slice(0, 4)
+          ).map((category) => (
             <div key={category} className="flex mb-1">
               {/* Row label */}
               <div className="w-24 flex-shrink-0 text-xs text-white/70 py-2 pr-2 text-right truncate">
@@ -381,6 +385,18 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
             </div>
           ))}
         </div>
+
+        {/* See More Categories Button */}
+        {heatmapData.categories.length > 4 && (
+          <button
+            onClick={() => setShowAllCategories(!showAllCategories)}
+            className="w-full mt-2 py-1 px-2 rounded bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-300 hover:text-purple-200 text-xs font-medium transition-all flex items-center justify-center gap-1"
+          >
+            {showAllCategories
+              ? "Show Less Categories"
+              : `+ See ${heatmapData.categories.length - 4} More Categories`}
+          </button>
+        )}
       </div>
 
       {/* Summary Stats */}
