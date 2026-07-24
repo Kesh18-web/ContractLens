@@ -607,6 +607,7 @@ async def get_document_clauses(
                 order=clause_data.get("order", 0),
                 category=clause_data.get("category", "Other"),
                 risk_level=clause_data.get("risk_level", "moderate"),
+                original_text=clause_data.get("original_text") or clause_data.get("text") or "",
                 summary=clause_data.get("summary", ""),
                 language=clause_data.get("language", SupportedLanguage.ENGLISH.value),  # Use stored language from Firestore
                 readability_metrics=ReadabilityMetrics(

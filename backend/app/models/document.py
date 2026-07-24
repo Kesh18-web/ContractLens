@@ -54,6 +54,7 @@ class ClauseSummary(BaseModel):
     order: int = Field(description="Clause order in document", ge=1)
     category: str = Field(description="Clause category/type")
     risk_level: RiskLevel = Field(description="Risk assessment level")
+    original_text: Optional[str] = Field(default="", description="Original clause text")
     summary: str = Field(description="Plain-language summary")
     language: SupportedLanguage = Field(default=SupportedLanguage.ENGLISH, description="Summary language")
     readability_metrics: 'ReadabilityMetrics' = Field(description="Readability analysis metrics")
