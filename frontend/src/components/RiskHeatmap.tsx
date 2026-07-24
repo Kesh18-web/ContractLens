@@ -82,7 +82,22 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
     const categoryRiskMap = new Map<string, Map<RiskLevel, ClauseSummary[]>>();
 
     clauses.forEach((clause) => {
-      const category = clause.category || "Other";
+      let category = clause.category;
+      if (!category || category === "Other" || category === "other") {
+        const textUpper = (clause.original_text || clause.text || clause.summary || "").toUpperCase();
+        if (textUpper.includes("PROJECTS")) category = "Projects";
+        else if (textUpper.includes("TECHNICAL SKILLS") || textUpper.includes("SKILLS")) category = "Technical Skills";
+        else if (textUpper.includes("EXPERIENCE")) category = "Experience";
+        else if (textUpper.includes("EDUCATION")) category = "Education";
+        else if (textUpper.includes("ACHIEVEMENTS")) category = "Achievements";
+        else if (textUpper.includes("CONFIDENTIAL")) category = "Confidentiality";
+        else if (textUpper.includes("TERMINAT")) category = "Termination";
+        else if (textUpper.includes("PAYMENT") || textUpper.includes("FEE")) category = "Payment";
+        else if (textUpper.includes("LIABILITY")) category = "Liability";
+        else if (textUpper.includes("PERSON_NAME") || textUpper.includes("EMAIL")) category = "Contact Details";
+        else category = "General";
+      }
+
       if (!categoryRiskMap.has(category)) {
         categoryRiskMap.set(category, new Map());
       }

@@ -689,7 +689,21 @@ Always output in strict JSON format only."""
         clauses_text = "CLAUSES:\n"
         for i, clause in enumerate(relevant_clauses):
             clause_order = clause.get('order', i + 1)
-            clause_category = clause.get('category', 'Unknown')
+            clause_category = clause.get('category')
+            if not clause_category or str(clause_category).lower() in ["other", "unknown", "none", "null"]:
+                text_upper = (clause.get('original_text') or clause.get('summary') or "").upper()
+                if "PROJECTS" in text_upper: clause_category = "Projects"
+                elif "TECHNICAL SKILLS" in text_upper or "SKILLS" in text_upper: clause_category = "Technical Skills"
+                elif "EXPERIENCE" in text_upper: clause_category = "Experience"
+                elif "EDUCATION" in text_upper: clause_category = "Education"
+                elif "ACHIEVEMENTS" in text_upper: clause_category = "Achievements"
+                elif "CONFIDENTIAL" in text_upper: clause_category = "Confidentiality"
+                elif "TERMINAT" in text_upper: clause_category = "Termination"
+                elif "PAYMENT" in text_upper or "FEE" in text_upper: clause_category = "Payment"
+                elif "LIABILITY" in text_upper: clause_category = "Liability"
+                elif "PERSON_NAME" in text_upper or "EMAIL" in text_upper: clause_category = "Contact Details"
+                else: clause_category = "General"
+
             clauses_text += f"Clause {clause_order} ({clause_category}):\n"
             clauses_text += f"Summary: {clause.get('summary', '')}\n"
             clauses_text += f"Original: {clause.get('original_text', '')[:500]}...\n\n"

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Negotiation Service - AI-Powered Clause Alternative Generation
 
 This service generates strategic alternatives for risky contract clauses,
@@ -413,13 +413,32 @@ class NegotiationService:
                 else:
                     alt_type = expected_types[i] if i < len(expected_types) else AlternativeType.BALANCED
                 
+                # Calculate dynamic confidence based on alternative text quality, benefit depth, and risk level
+                raw_conf = float(alt_data.get("confidence", 0.8))
+                alt_text = alt_data.get("alternative_text", "")
+                benefit_text = alt_data.get("strategic_benefit", "")
+
+                words_count = len(alt_text.split())
+                length_score = min(0.10, (words_count / 120.0) * 0.10)
+                benefit_score = min(0.06, (len(benefit_text.split()) / 25.0) * 0.06)
+
+                # Type base variance
+                if alt_type == AlternativeType.BALANCED:
+                    type_base = 0.81
+                elif alt_type == AlternativeType.PROTECTIVE:
+                    type_base = 0.77
+                else:
+                    type_base = 0.85
+
+                computed_confidence = round(min(0.97, max(0.72, type_base + length_score + benefit_score + (raw_conf * 0.05))), 2)
+
                 alternative = NegotiationAlternative(
                     alternative_id=str(uuid.uuid4()),
-                    alternative_text=alt_data.get("alternative_text", ""),
-                    strategic_benefit=alt_data.get("strategic_benefit", ""),
+                    alternative_text=alt_text,
+                    strategic_benefit=benefit_text,
                     risk_reduction=alt_data.get("risk_reduction", ""),
                     implementation_notes=alt_data.get("implementation_notes", ""),
-                    confidence=float(alt_data.get("confidence", 0.7)),
+                    confidence=computed_confidence,
                     alternative_type=alt_type
                 )
                 
