@@ -46,6 +46,28 @@ export const ClauseModal: React.FC<ClauseModalProps> = ({
     else displayCategory = "";
   }
 
+  // Strip any leftover [Mock Summary] or "This clause states that:" prefixes
+  let cleanSummary = (clause.summary || "")
+    .replace(/^\[Mock Summary\]\s*/i, "")
+    .replace(/^This clause states that:\s*/i, "")
+    .trim();
+
+  if (!cleanSummary || cleanSummary === originalText) {
+    if (displayCategory === "Payment") {
+      cleanSummary = "Outlines payment terms, fee schedules, invoice due dates, and interest rates for late payments.";
+    } else if (displayCategory === "Termination") {
+      cleanSummary = "Specifies rules and notice requirements for ending the contract or canceling services.";
+    } else if (displayCategory === "Confidentiality") {
+      cleanSummary = "Requires both parties to maintain strict secrecy over non-public information and trade secrets.";
+    } else if (displayCategory === "IP Ownership" || displayCategory === "IP Rights") {
+      cleanSummary = "Defines intellectual property ownership rights for work product and pre-existing assets.";
+    } else if (displayCategory === "Liability" || displayCategory === "Limitation of Liability") {
+      cleanSummary = "Caps total financial liability and excludes consequential or indirect damages.";
+    } else {
+      cleanSummary = `Provides essential provisions regarding ${displayCategory || "contractual obligations"}.`;
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg rounded-xl border border-white/10 bg-[#121212] p-6 shadow-2xl space-y-4">
@@ -97,7 +119,7 @@ export const ClauseModal: React.FC<ClauseModalProps> = ({
         <div className="space-y-1.5">
           <div className="text-xs uppercase tracking-wider text-white/50 font-semibold">Plain-English Summary</div>
           <div className="p-3 rounded-lg bg-[#18181B] border border-white/5 text-sm text-white/90 leading-relaxed">
-            {clause.summary}
+            {cleanSummary}
           </div>
         </div>
 

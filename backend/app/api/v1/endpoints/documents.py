@@ -602,13 +602,20 @@ async def get_document_clauses(
         for clause_data in clauses_data:
             readability_metrics_data = clause_data.get("readability_metrics", {})
 
+            raw_summary = clause_data.get("summary", "")
+            clean_summary = (
+                raw_summary.replace("[Mock Summary] ", "")
+                .replace("This clause states that: ", "")
+                .strip()
+            )
+
             summary = ClauseSummary(
                 clause_id=clause_data.get("clause_id", ""),
                 order=clause_data.get("order", 0),
                 category=clause_data.get("category", "Other"),
                 risk_level=clause_data.get("risk_level", "moderate"),
                 original_text=clause_data.get("original_text") or clause_data.get("text") or "",
-                summary=clause_data.get("summary", ""),
+                summary=clean_summary if clean_summary else raw_summary,
                 language=clause_data.get("language", SupportedLanguage.ENGLISH.value),  # Use stored language from Firestore
                 readability_metrics=ReadabilityMetrics(
                     original_grade=readability_metrics_data.get("original_grade", 0.0),

@@ -15,6 +15,7 @@ interface RiskHeatmapProps {
     riskLevel: string
   ) => void;
   onSelectClause?: (clause: ClauseSummary) => void;
+  onSelectClauseList?: (title: string, filteredClauses: ClauseSummary[]) => void;
 }
 
 interface HeatmapCell {
@@ -67,6 +68,7 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
   error = null,
   onGenerateAlternatives,
   onSelectClause,
+  onSelectClauseList,
 }) => {
   const t = useTranslations();
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -342,6 +344,14 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
                     style={{ opacity: getCellOpacity(cell) }}
                     onMouseEnter={(e) => handleCellHover(cell, e)}
                     onMouseLeave={handleCellLeave}
+                    onClick={() => {
+                      if (!cell.clauses || cell.clauses.length === 0) return;
+                      if (onSelectClauseList) {
+                        onSelectClauseList(`${category} (${riskLevel.toUpperCase()} Risk)`, cell.clauses);
+                      } else if (onSelectClause) {
+                        onSelectClause(cell.clauses[0]);
+                      }
+                    }}
                   >
                     {cell.count > 0 && (
                       <div className="absolute inset-0 flex items-center justify-center">
@@ -363,7 +373,12 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
         <div className="grid grid-cols-3 gap-2 text-center">
           <div
             onClick={() => {
-              if (clauses && clauses.length > 0 && onSelectClause) onSelectClause(clauses[0]);
+              if (!clauses || clauses.length === 0) return;
+              if (onSelectClauseList) {
+                onSelectClauseList("All Document Clauses", clauses);
+              } else if (onSelectClause) {
+                onSelectClause(clauses[0]);
+              }
             }}
             className="p-2 rounded-lg bg-[#141414] hover:bg-[#1C1C1F] hover:border-purple-500/30 border border-white/5 cursor-pointer transition-all"
           >
@@ -376,9 +391,13 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
           </div>
           <div
             onClick={() => {
-              if (!clauses || clauses.length === 0 || !onSelectClause) return;
-              const high = clauses.find((c) => c.risk_level === "attention") || clauses[0];
-              onSelectClause(high);
+              if (!clauses || clauses.length === 0) return;
+              const highClauses = clauses.filter((c) => c.risk_level === "attention");
+              if (onSelectClauseList) {
+                onSelectClauseList("High Risk Clauses", highClauses);
+              } else if (onSelectClause && highClauses.length > 0) {
+                onSelectClause(highClauses[0]);
+              }
             }}
             className="p-2 rounded-lg bg-[#141414] hover:bg-[#1C1C1F] hover:border-red-500/30 border border-white/5 cursor-pointer transition-all"
           >
@@ -391,9 +410,13 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
           </div>
           <div
             onClick={() => {
-              if (!clauses || clauses.length === 0 || !onSelectClause) return;
-              const mod = clauses.find((c) => c.risk_level === "moderate") || clauses[0];
-              onSelectClause(mod);
+              if (!clauses || clauses.length === 0) return;
+              const modClauses = clauses.filter((c) => c.risk_level === "moderate");
+              if (onSelectClauseList) {
+                onSelectClauseList("Moderate Risk Clauses", modClauses);
+              } else if (onSelectClause && modClauses.length > 0) {
+                onSelectClause(modClauses[0]);
+              }
             }}
             className="p-2 rounded-lg bg-[#141414] hover:bg-[#1C1C1F] hover:border-yellow-500/30 border border-white/5 cursor-pointer transition-all"
           >

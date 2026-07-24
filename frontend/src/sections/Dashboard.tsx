@@ -20,6 +20,7 @@ import { MobileHeader } from "@/components/MobileHeader";
 import { UploadCardsContainer } from "@/components/UploadCardsContainer";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
 import { ClauseModal } from "@/components/ClauseModal";
+import { ClauseListModal } from "@/components/ClauseListModal";
 import { ClauseSummary } from "@/lib/api";
 
 export const Dashboard = () => {
@@ -30,6 +31,11 @@ export const Dashboard = () => {
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [selectedModalClause, setSelectedModalClause] = useState<ClauseSummary | null>(null);
   const [isClauseModalOpen, setIsClauseModalOpen] = useState(false);
+
+  // Clause list modal state
+  const [isClauseListModalOpen, setIsClauseListModalOpen] = useState(false);
+  const [clauseListTitle, setClauseListTitle] = useState("Filtered Clauses");
+  const [filteredClauseList, setFilteredClauseList] = useState<ClauseSummary[]>([]);
 
   // Document management hook
   const documentManagement = useDocumentManagement();
@@ -305,6 +311,11 @@ export const Dashboard = () => {
           setSelectedModalClause(clause);
           setIsClauseModalOpen(true);
         }}
+        onSelectClauseList={(title, filtered) => {
+          setClauseListTitle(title);
+          setFilteredClauseList(filtered);
+          setIsClauseListModalOpen(true);
+        }}
         analysisTitle={t("analysis.title")}
         riskAnalysisTitle={t("analysis.riskAnalysis")}
         negotiationTitle="AI Negotiation Assistant"
@@ -317,6 +328,22 @@ export const Dashboard = () => {
         isOpen={isClauseModalOpen}
         onClose={() => setIsClauseModalOpen(false)}
         clause={selectedModalClause}
+        onGenerateAlternatives={(clauseId, category, riskLevel) => {
+          setRightPanelOpen(true);
+          negotiationState.handleGenerateAlternatives(clauseId, category, riskLevel);
+        }}
+      />
+
+      {/* Interactive Filtered Clause List Modal */}
+      <ClauseListModal
+        isOpen={isClauseListModalOpen}
+        onClose={() => setIsClauseListModalOpen(false)}
+        title={clauseListTitle}
+        clauses={filteredClauseList}
+        onSelectClause={(clause) => {
+          setSelectedModalClause(clause);
+          setIsClauseModalOpen(true);
+        }}
         onGenerateAlternatives={(clauseId, category, riskLevel) => {
           setRightPanelOpen(true);
           negotiationState.handleGenerateAlternatives(clauseId, category, riskLevel);

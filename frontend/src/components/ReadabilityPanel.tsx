@@ -11,6 +11,7 @@ interface ReadabilityPanelProps {
   isLoading?: boolean;
   error?: unknown;
   onSelectClause?: (clause: ClauseSummary) => void;
+  onSelectClauseList?: (title: string, filteredClauses: ClauseSummary[]) => void;
 }
 
 interface ReadabilityStats {
@@ -65,7 +66,7 @@ function toCamelCase(str: string): string {
 }
 
 
-export function ReadabilityPanel({ clauses, isLoading, error, onSelectClause }: ReadabilityPanelProps) {
+export function ReadabilityPanel({ clauses, isLoading, error, onSelectClause, onSelectClauseList }: ReadabilityPanelProps) {
   const t = useTranslations();
   const stats = useMemo<ReadabilityStats>(() => {
     if (!clauses || clauses.length === 0) {
@@ -101,8 +102,8 @@ export function ReadabilityPanel({ clauses, isLoading, error, onSelectClause }: 
 
     clauses.forEach((clause) => {
       const metrics = clause.readability_metrics;
-      const grade = metrics?.original_grade ?? 12;
-      const flesch = metrics?.flesch_score ?? 50;
+      const grade = clause.grade_level ?? metrics?.original_grade ?? 12;
+      const flesch = clause.flesch_score ?? metrics?.flesch_score ?? 50;
 
       totalOriginalGrade += grade;
       totalFleschScore += flesch;
@@ -121,8 +122,8 @@ export function ReadabilityPanel({ clauses, isLoading, error, onSelectClause }: 
       }
     });
 
-    const averageGrade = validClauses > 0 ? totalOriginalGrade / validClauses : 12;
-    const averageFleschScore = validClauses > 0 ? totalFleschScore / validClauses : 50;
+    const averageGrade = validClauses > 0 ? totalOriginalGrade / validClauses : 0;
+    const averageFleschScore = validClauses > 0 ? totalFleschScore / validClauses : 0;
 
     return {
       averageGrade,
@@ -136,18 +137,39 @@ export function ReadabilityPanel({ clauses, isLoading, error, onSelectClause }: 
   }, [clauses]);
 
   const handleCardClick = (levelFilter?: string) => {
-    if (!clauses || clauses.length === 0 || !onSelectClause) return;
-    let target = clauses[0];
+    if (!clauses || clauses.length === 0) return;
+
+    let filtered = clauses;
+    let filterTitle = "Document Readability Clauses";
+
     if (levelFilter === 'veryDifficult') {
-      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) > 16) || clauses[0];
+      filtered = clauses.filter(c => (c.grade_level ?? c.readability_metrics?.original_grade ?? 12) > 16);
+      filterTitle = "Very Difficult Clauses (Grade > 16)";
     } else if (levelFilter === 'difficult') {
-      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) > 13) || clauses[0];
+      filtered = clauses.filter(c => {
+        const g = c.grade_level ?? c.readability_metrics?.original_grade ?? 12;
+        return g > 13 && g <= 16;
+      });
+      filterTitle = "Difficult Clauses (Grade 13-16)";
+    } else if (levelFilter === 'allHighlyDifficult') {
+      filtered = clauses.filter(c => (c.grade_level ?? c.readability_metrics?.original_grade ?? 12) > 13);
+      filterTitle = "Highly Difficult Clauses (Grade > 13)";
     } else if (levelFilter === 'moderate') {
-      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) > 9) || clauses[0];
+      filtered = clauses.filter(c => {
+        const g = c.grade_level ?? c.readability_metrics?.original_grade ?? 12;
+        return g > 9 && g <= 13;
+      });
+      filterTitle = "Moderate Difficulty Clauses (Grade 9-13)";
     } else if (levelFilter === 'easy') {
-      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) <= 9) || clauses[0];
+      filtered = clauses.filter(c => (c.grade_level ?? c.readability_metrics?.original_grade ?? 12) <= 9);
+      filterTitle = "Easy Readability Clauses (Grade <= 9)";
     }
-    onSelectClause(target);
+
+    if (onSelectClauseList) {
+      onSelectClauseList(filterTitle, filtered);
+    } else if (onSelectClause && filtered.length > 0) {
+      onSelectClause(filtered[0]);
+    }
   };
 
   if (error) {
