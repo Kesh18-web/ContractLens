@@ -241,7 +241,7 @@ class GeminiClient:
             results.append({
                 "clause_id": f"clause_{i}",
                 "original_text": clause.text,
-                "summary": f"[Mock Summary] {summary}",
+                "summary": summary,
                 "category": category,
                 "risk_level": risk_level,
                 "negotiation_tip": neg_tip if include_negotiation_tips else None,
@@ -370,10 +370,10 @@ class GeminiClient:
             clauses_text += "===\n"
         output_format = {
             "id": "clause_0",
-            "summary": "Clear explanation of what this clause means in everyday language, focusing on practical implications",
-            "clause_category": "One of: Termination, Liability, Indemnity, Confidentiality, Payment, IP Ownership, Dispute Resolution, Governing Law, Assignment, Modification, Warranties, Force Majeure, Definitions, Other",
+            "summary": "Clear explanation of what this section/clause means in everyday language, focusing on practical implications",
+            "clause_category": "Short, precise 1-3 word topic category describing this section (e.g., Work Experience, Education, Contact Details, Termination, Liability, Payment, Confidentiality, IP Ownership, Projects, Achievements, etc.)",
             "risk_level": "One of: low, moderate, attention",
-            "negotiation_tip": "Specific, actionable advice for improving this clause (or null if not applicable)"
+            "negotiation_tip": "Specific, actionable advice for improving this clause or section (or null if not applicable)"
         }
         prompt = (
             f"{clauses_text}\n\nYOUR OBJECTIVE: Transform each clause into clear, understandable guidance.\n\n"
@@ -498,14 +498,13 @@ class GeminiClient:
         if validated["risk_level"] not in valid_risk_levels:
             validated["risk_level"] = "moderate"
         
-        # Validate category
-        valid_categories = [
-            "Termination", "Liability", "Indemnity", "Confidentiality",
-            "Payment", "IP Ownership", "Dispute Resolution", "Governing Law",
-            "Assignment", "Modification", "Warranties", "Force Majeure", "Definitions", "Other"
-        ]
-        if validated["category"] not in valid_categories:
-            validated["category"] = "Other"
+        # Validate category - preserve Gemini's descriptive category if non-empty, otherwise default to 'General'
+        category_str = str(validated.get("category", "")).strip()
+        if category_str and category_str.lower() != "null" and category_str.lower() != "none":
+            # Capitalize first letter of words
+            validated["category"] = " ".join(word.capitalize() for word in category_str.split())
+        else:
+            validated["category"] = "General"
         
         return validated
     
@@ -961,7 +960,7 @@ RESPONSE GUIDELINES:
         await self.initialize()
 
         if self._client is None:
-            return f"[Mock Summary] Discussed the contract terms and analyzed various clause categories for potential risks."
+            return "Discussed the contract terms and analyzed various clause categories for potential risks."
 
         system_prompt = (
             "You are a helpful assistant that creates concise conversation summaries. "

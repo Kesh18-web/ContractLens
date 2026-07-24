@@ -656,10 +656,14 @@ class ClauseSegmenter:
 
                 if confidence >= confidence_threshold and best_score >= evidence_threshold:
                     clause.category = best_category
+                elif getattr(clause, "heading", None):
+                    clause.category = clause.heading.strip().title()
                 else:
-                    clause.category = "Other"
+                    clause.category = "General"
+            elif getattr(clause, "heading", None):
+                clause.category = clause.heading.strip().title()
             else:
-                clause.category = "Other"
+                clause.category = "General"
 
         return clauses
 
