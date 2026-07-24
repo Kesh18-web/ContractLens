@@ -10,6 +10,7 @@ interface ReadabilityPanelProps {
   clauses: ClauseSummary[];
   isLoading?: boolean;
   error?: unknown;
+  onSelectClause?: (clause: ClauseSummary) => void;
 }
 
 interface ReadabilityStats {
@@ -64,7 +65,7 @@ function toCamelCase(str: string): string {
 }
 
 
-export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanelProps) {
+export function ReadabilityPanel({ clauses, isLoading, error, onSelectClause }: ReadabilityPanelProps) {
   const t = useTranslations();
   const stats = useMemo<ReadabilityStats>(() => {
     if (!clauses || clauses.length === 0) {
@@ -99,27 +100,24 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
     };
 
     clauses.forEach((clause) => {
-      // Check if clause has readability metrics
-      if (clause.readability_metrics) {
-        const grade = clause.readability_metrics.original_grade || 12;
-        const fleschScore = clause.readability_metrics.flesch_score || 50;
+      const metrics = clause.readability_metrics;
+      const grade = metrics?.original_grade ?? 12;
+      const flesch = metrics?.flesch_score ?? 50;
 
-        totalOriginalGrade += grade;
-        totalFleschScore += fleschScore;
-        validClauses++;
+      totalOriginalGrade += grade;
+      totalFleschScore += flesch;
+      validClauses++;
 
-        // Count difficulty levels
-        if (grade > 16) {
-          veryDifficultCount++;
-          distribution.veryDifficult++;
-        } else if (grade > 13) {
-          highlyDifficultCount++;
-          distribution.difficult++;
-        } else if (grade > 9) {
-          distribution.moderate++;
-        } else {
-          distribution.easy++;
-        }
+      if (grade > 16) {
+        veryDifficultCount++;
+        distribution.veryDifficult++;
+      } else if (grade > 13) {
+        highlyDifficultCount++;
+        distribution.difficult++;
+      } else if (grade > 9) {
+        distribution.moderate++;
+      } else {
+        distribution.easy++;
       }
     });
 
@@ -136,6 +134,21 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
       difficultyDistribution: distribution,
     };
   }, [clauses]);
+
+  const handleCardClick = (levelFilter?: string) => {
+    if (!clauses || clauses.length === 0 || !onSelectClause) return;
+    let target = clauses[0];
+    if (levelFilter === 'veryDifficult') {
+      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) > 16) || clauses[0];
+    } else if (levelFilter === 'difficult') {
+      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) > 13) || clauses[0];
+    } else if (levelFilter === 'moderate') {
+      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) > 9) || clauses[0];
+    } else if (levelFilter === 'easy') {
+      target = clauses.find(c => (c.readability_metrics?.original_grade ?? 12) <= 9) || clauses[0];
+    }
+    onSelectClause(target);
+  };
 
   if (error) {
     return (
@@ -183,7 +196,10 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
       {/* Main Metrics Grid */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         {/* Document Grade Level */}
-        <div className="text-center p-3 rounded-lg bg-[#121212] border border-white/5">
+        <div
+          onClick={() => handleCardClick()}
+          className="text-center p-3 rounded-lg bg-[#121212] border border-white/5 hover:border-blue-500/40 hover:bg-[#18181F] cursor-pointer transition-all"
+        >
           <div className={`text-2xl font-bold ${getReadabilityColor(stats.readabilityLevel)}`}>
             {stats.averageGrade.toFixed(1)}
           </div>
@@ -194,7 +210,10 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
         </div>
 
         {/* Flesch Reading Ease */}
-        <div className="text-center p-3 rounded-lg bg-[#121212] border border-white/5">
+        <div
+          onClick={() => handleCardClick()}
+          className="text-center p-3 rounded-lg bg-[#121212] border border-white/5 hover:border-purple-500/40 hover:bg-[#18181F] cursor-pointer transition-all"
+        >
           <div className="text-2xl font-bold text-purple-400">
             {Math.round(stats.averageFleschScore)}
           </div>
@@ -207,7 +226,10 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
 
       {/* Difficulty Stats */}
       <div className="space-y-3 mb-4">
-        <div className="flex items-center justify-between p-2 rounded bg-[#121212] border border-white/5">
+        <div
+          onClick={() => handleCardClick('difficult')}
+          className="flex items-center justify-between p-2 rounded bg-[#121212] border border-white/5 hover:border-red-500/30 hover:bg-[#18181F] cursor-pointer transition-all"
+        >
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-red-400" />
             <span className="text-sm text-white/80">{t('readability.difficultyLabels.highlyDifficult')}</span>
@@ -217,7 +239,10 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-2 rounded bg-[#121212] border border-white/5">
+        <div
+          onClick={() => handleCardClick('veryDifficult')}
+          className="flex items-center justify-between p-2 rounded bg-[#121212] border border-white/5 hover:border-orange-500/30 hover:bg-[#18181F] cursor-pointer transition-all"
+        >
           <div className="flex items-center gap-2">
             <Target className="h-4 w-4 text-orange-400" />
             <span className="text-sm text-white/80">{t('readability.difficultyLabels.veryDifficult')}</span>
@@ -230,23 +255,26 @@ export function ReadabilityPanel({ clauses, isLoading, error }: ReadabilityPanel
 
       {/* Difficulty Distribution */}
       <div className="mb-4">
-        <div className="text-xs text-white/60 mb-2">{t('readability.difficultyDistribution')}</div>
-        <div className="grid grid-cols-4 gap-1 text-xs">
-          <div className="text-center p-2 rounded bg-green-500/20 text-green-300">
-            <div className="font-medium">{stats.difficultyDistribution.easy}</div>
-            <div className="text-[10px] opacity-70">{t('readability.difficultyLabels.easy')}</div>
+        <div className="text-xs text-white/60 mb-2 flex items-center justify-between">
+          <span>{t('readability.difficultyDistribution')}</span>
+          <span className="text-[10px] text-purple-400 underline">Click to inspect</span>
+        </div>
+        <div className="grid grid-cols-4 gap-1.5 text-xs">
+          <div onClick={() => handleCardClick('easy')} className="text-center p-2 rounded-lg bg-green-500/20 text-green-300 border border-green-500/30 hover:bg-green-500/40 transition-all cursor-pointer">
+            <div className="font-bold text-sm">{stats.difficultyDistribution.easy}</div>
+            <div className="text-[10px] opacity-80">{t('readability.difficultyLabels.easy')}</div>
           </div>
-          <div className="text-center p-2 rounded bg-blue-500/20 text-blue-300">
-            <div className="font-medium">{stats.difficultyDistribution.moderate}</div>
-            <div className="text-[10px] opacity-70">{t('readability.difficultyLabels.moderate')}</div>
+          <div onClick={() => handleCardClick('moderate')} className="text-center p-2 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:bg-blue-500/40 transition-all cursor-pointer">
+            <div className="font-bold text-sm">{stats.difficultyDistribution.moderate}</div>
+            <div className="text-[10px] opacity-80">{t('readability.difficultyLabels.moderate')}</div>
           </div>
-          <div className="text-center p-2 rounded bg-orange-500/20 text-orange-300">
-            <div className="font-medium">{stats.difficultyDistribution.difficult}</div>
-            <div className="text-[10px] opacity-70">{t('readability.difficultyLabels.difficult')}</div>
+          <div onClick={() => handleCardClick('difficult')} className="text-center p-2 rounded-lg bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/40 transition-all cursor-pointer">
+            <div className="font-bold text-sm">{stats.difficultyDistribution.difficult}</div>
+            <div className="text-[10px] opacity-80">{t('readability.difficultyLabels.difficult')}</div>
           </div>
-          <div className="text-center p-2 rounded bg-red-500/20 text-red-300">
-            <div className="font-medium">{stats.difficultyDistribution.veryDifficult}</div>
-            <div className="text-[10px] opacity-70">{t('readability.difficultyLabels.veryHard')}</div>
+          <div onClick={() => handleCardClick('veryDifficult')} className="text-center p-2 rounded-lg bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/40 transition-all cursor-pointer">
+            <div className="font-bold text-sm">{stats.difficultyDistribution.veryDifficult}</div>
+            <div className="text-[10px] opacity-80">{t('readability.difficultyLabels.veryHard')}</div>
           </div>
         </div>
       </div>

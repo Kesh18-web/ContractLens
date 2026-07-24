@@ -14,6 +14,7 @@ interface RiskHeatmapProps {
     clauseCategory: string,
     riskLevel: string
   ) => void;
+  onSelectClause?: (clause: ClauseSummary) => void;
 }
 
 interface HeatmapCell {
@@ -65,6 +66,7 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
   isLoading = false,
   error = null,
   onGenerateAlternatives,
+  onSelectClause,
 }) => {
   const t = useTranslations();
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -356,10 +358,15 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
         </div>
       </div>
 
-      {/* Summary stats */}
+      {/* Summary Stats */}
       <div className="mt-4 pt-3 border-t border-white/10">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div
+            onClick={() => {
+              if (clauses && clauses.length > 0 && onSelectClause) onSelectClause(clauses[0]);
+            }}
+            className="p-2 rounded-lg bg-[#141414] hover:bg-[#1C1C1F] hover:border-purple-500/30 border border-white/5 cursor-pointer transition-all"
+          >
             <div className="text-lg font-semibold text-white">
               {clauses.length}
             </div>
@@ -367,7 +374,14 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
               {t("analysis.totalClauses")}
             </div>
           </div>
-          <div>
+          <div
+            onClick={() => {
+              if (!clauses || clauses.length === 0 || !onSelectClause) return;
+              const high = clauses.find((c) => c.risk_level === "attention") || clauses[0];
+              onSelectClause(high);
+            }}
+            className="p-2 rounded-lg bg-[#141414] hover:bg-[#1C1C1F] hover:border-red-500/30 border border-white/5 cursor-pointer transition-all"
+          >
             <div className="text-lg font-semibold text-red-400">
               {clauses.filter((c) => c.risk_level === "attention").length}
             </div>
@@ -375,7 +389,14 @@ export const RiskHeatmap: React.FC<RiskHeatmapProps> = ({
               {t("analysis.highRisk")}
             </div>
           </div>
-          <div>
+          <div
+            onClick={() => {
+              if (!clauses || clauses.length === 0 || !onSelectClause) return;
+              const mod = clauses.find((c) => c.risk_level === "moderate") || clauses[0];
+              onSelectClause(mod);
+            }}
+            className="p-2 rounded-lg bg-[#141414] hover:bg-[#1C1C1F] hover:border-yellow-500/30 border border-white/5 cursor-pointer transition-all"
+          >
             <div className="text-lg font-semibold text-yellow-400">
               {clauses.filter((c) => c.risk_level === "moderate").length}
             </div>

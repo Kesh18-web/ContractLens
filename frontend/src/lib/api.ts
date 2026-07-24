@@ -75,9 +75,14 @@ export interface DocumentUploadResponse {
 export interface ClauseSummary {
   clause_id: string;
   order: number;
+  clause_number?: number;
   category: string;
   risk_level: RiskLevel;
   summary: string;
+  original_text?: string;
+  text?: string;
+  flesch_score?: number;
+  grade_level?: number;
   language?: string;
   readability_metrics: ReadabilityMetrics;
   needs_review: boolean;

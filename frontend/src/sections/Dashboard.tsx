@@ -19,6 +19,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { MobileHeader } from "@/components/MobileHeader";
 import { UploadCardsContainer } from "@/components/UploadCardsContainer";
 import { AnalysisPanel } from "@/components/AnalysisPanel";
+import { ClauseModal } from "@/components/ClauseModal";
+import { ClauseSummary } from "@/lib/api";
 
 export const Dashboard = () => {
   const t = useTranslations();
@@ -26,6 +28,8 @@ export const Dashboard = () => {
   // UI state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [selectedModalClause, setSelectedModalClause] = useState<ClauseSummary | null>(null);
+  const [isClauseModalOpen, setIsClauseModalOpen] = useState(false);
 
   // Document management hook
   const documentManagement = useDocumentManagement();
@@ -141,6 +145,57 @@ export const Dashboard = () => {
     })
     .filter(Boolean);
 
+  // Handle source click from chat message
+  const handleSelectSource = useCallback(
+    (source: {
+      clause_id?: string;
+      clause_number?: number;
+      category?: string;
+      snippet: string;
+    }) => {
+      const matchedClause =
+        clauses.find(
+          (c) =>
+            (source.clause_id && c.clause_id === source.clause_id) ||
+            (source.clause_number && c.clause_number === source.clause_number)
+        ) || {
+          clause_id: source.clause_id || `source-${Date.now()}`,
+          order: source.clause_number || 1,
+          clause_number: source.clause_number || 1,
+          category: source.category || "General",
+          text: source.snippet,
+          summary: source.snippet,
+          risk_level: "moderate" as const,
+          flesch_score: 25,
+          grade_level: 16.5,
+          readability_metrics: {
+            original_grade: 16.5,
+            summary_grade: 10.0,
+            delta: 6.5,
+            flesch_score: 25,
+          },
+          needs_review: false,
+        };
+
+      setSelectedModalClause(matchedClause);
+      setIsClauseModalOpen(true);
+
+      if (
+        matchedClause.clause_id &&
+        (matchedClause.risk_level === "attention" ||
+          matchedClause.risk_level === "moderate")
+      ) {
+        setRightPanelOpen(true);
+        negotiationState.handleGenerateAlternatives(
+          matchedClause.clause_id,
+          matchedClause.category,
+          matchedClause.risk_level
+        );
+      }
+    },
+    [clauses, negotiationState]
+  );
+
   // Fetch chat sessions list for the sidebar
   const { data: chatSessionsData } = useChatSessionsList();
   const chatSessions = chatSessionsData?.sessions || [];
@@ -210,6 +265,7 @@ export const Dashboard = () => {
             onSendMessage={chatMessages.sendMessage}
             onRetryMessage={chatMessages.handleRetry}
             onFeedback={chatMessages.handleFeedback}
+            onSelectSource={handleSelectSource}
             selectedDocuments={selectedDocuments}
             onRemoveDocument={(docId) =>
               documentManagement.toggleSelectDoc(docId)
@@ -245,11 +301,26 @@ export const Dashboard = () => {
         onCopyAlternative={(altId) => {
           console.log("Copied alternative:", altId);
         }}
+        onSelectClause={(clause) => {
+          setSelectedModalClause(clause);
+          setIsClauseModalOpen(true);
+        }}
         analysisTitle={t("analysis.title")}
         riskAnalysisTitle={t("analysis.riskAnalysis")}
         negotiationTitle="AI Negotiation Assistant"
         closeLabel="Close"
         showNegotiationLabel="Show Negotiation Alternatives"
+      />
+
+      {/* Interactive Clause Inspection Modal */}
+      <ClauseModal
+        isOpen={isClauseModalOpen}
+        onClose={() => setIsClauseModalOpen(false)}
+        clause={selectedModalClause}
+        onGenerateAlternatives={(clauseId, category, riskLevel) => {
+          setRightPanelOpen(true);
+          negotiationState.handleGenerateAlternatives(clauseId, category, riskLevel);
+        }}
       />
     </div>
   );

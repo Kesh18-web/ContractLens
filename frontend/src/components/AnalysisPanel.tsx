@@ -16,6 +16,7 @@ export interface AnalysisPanelProps {
   negotiationState: UseNegotiationStateReturn;
   selectedClauseForNegotiation: ClauseInfo | null;
   onCopyAlternative: (altId: string) => void;
+  onSelectClause?: (clause: ClauseSummary) => void;
   analysisTitle: string;
   riskAnalysisTitle: string;
   negotiationTitle: string;
@@ -35,6 +36,7 @@ export const AnalysisPanel = ({
   negotiationState,
   selectedClauseForNegotiation,
   onCopyAlternative,
+  onSelectClause,
   analysisTitle,
   riskAnalysisTitle,
   negotiationTitle,
@@ -91,6 +93,7 @@ export const AnalysisPanel = ({
                   onGenerateAlternatives={
                     negotiationState.handleGenerateAlternatives
                   }
+                  onSelectClause={onSelectClause}
                 />
 
                 {/* Reopen Negotiation Button (when panel closed but data exists) */}
@@ -186,6 +189,7 @@ export const AnalysisPanel = ({
                 clauses={clauses || []}
                 isLoading={clausesLoading}
                 error={clausesError}
+                onSelectClause={onSelectClause}
               />
             </div>
           </div>

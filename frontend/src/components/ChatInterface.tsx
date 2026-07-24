@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Clock,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -142,6 +143,7 @@ interface ChatInterfaceProps {
   onSendMessage: (content: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: "positive" | "negative") => void;
+  onSelectSource?: (source: any) => void;
   selectedDocuments: SelectedDocument[];
   onRemoveDocument: (docId: string) => void;
   onClearContext: () => void;
@@ -156,6 +158,7 @@ export const ChatInterface = ({
   onSendMessage,
   onRetryMessage,
   onFeedback,
+  onSelectSource,
   selectedDocuments,
   onRemoveDocument,
   onClearContext,
@@ -353,23 +356,45 @@ export const ChatInterface = ({
                               ) => (
                                 <div
                                   key={idx}
-                                  className="text-xs text-white/60 border-l-2 border-purple-500/30 pl-2"
+                                  onClick={() => onSelectSource?.(source)}
+                                  className="group/src text-xs text-white/80 border-l-2 border-purple-500/60 pl-3 py-1.5 rounded-r-lg bg-purple-950/20 hover:bg-purple-900/40 hover:border-purple-400 cursor-pointer transition-all duration-150"
                                 >
                                   <div className="flex items-center justify-between mb-1">
-                                    <span className="font-medium">
-                                      {source.clause_number && source.category
-                                        ? `Clause ${source.clause_number} (${source.category})`
-                                        : `Source ${idx + 1}`}
+                                    <span className="font-semibold text-purple-300 group-hover/src:text-purple-200 flex items-center gap-1">
+                                      <Sparkles className="w-3 h-3 text-purple-400" />
+                                      {(() => {
+                                        let cat = source.category;
+                                        if (!cat || cat === "Other" || cat === "other") {
+                                          const textUpper = (source.snippet || "").toUpperCase();
+                                          if (textUpper.includes("PROJECTS")) cat = "Projects";
+                                          else if (textUpper.includes("TECHNICAL SKILLS") || textUpper.includes("SKILLS")) cat = "Technical Skills";
+                                          else if (textUpper.includes("EXPERIENCE")) cat = "Experience";
+                                          else if (textUpper.includes("EDUCATION")) cat = "Education";
+                                          else if (textUpper.includes("ACHIEVEMENTS")) cat = "Achievements";
+                                          else if (textUpper.includes("CONFIDENTIAL")) cat = "Confidentiality";
+                                          else if (textUpper.includes("TERMINAT")) cat = "Termination";
+                                          else if (textUpper.includes("PAYMENT") || textUpper.includes("FEE")) cat = "Payment";
+                                          else if (textUpper.includes("LIABILITY")) cat = "Liability";
+                                          else if (textUpper.includes("PERSON_NAME") || textUpper.includes("EMAIL")) cat = "Contact Details";
+                                          else cat = "";
+                                        }
+                                        return source.clause_number
+                                          ? `Clause ${source.clause_number}${cat ? ` (${cat})` : ''}`
+                                          : `Source ${idx + 1}`;
+                                      })()}
                                     </span>
-                                    <span className="text-purple-400">
-                                      {source.relevance_score > 0
-                                        ? `${Math.round(
-                                            source.relevance_score * 100
-                                          )}%`
-                                        : "N/A"}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-purple-400 font-mono text-[11px] font-semibold bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                                        {source.relevance_score > 0
+                                          ? `${Math.round(
+                                              source.relevance_score * 100
+                                            )}%`
+                                          : "N/A"}
+                                      </span>
+                                      <span className="text-[10px] text-purple-400 group-hover/src:text-purple-200 underline font-medium">Inspect & Negotiate &rarr;</span>
+                                    </div>
                                   </div>
-                                  <div>&quot;{source.snippet}&quot;</div>
+                                  <div className="text-white/70 line-clamp-2 italic">&quot;{source.snippet}&quot;</div>
                                 </div>
                               )
                             )}
