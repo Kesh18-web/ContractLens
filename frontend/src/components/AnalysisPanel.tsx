@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Flame, Sparkles } from "lucide-react";
+import { X, Flame, Sparkles, Maximize2, Minimize2 } from "lucide-react";
 import { RiskHeatmap } from "@/components/RiskHeatmap";
 import { ReadabilityPanel } from "@/components/ReadabilityPanel";
 import { NegotiationPanel } from "@/components/NegotiationPanel";
@@ -45,6 +46,8 @@ export const AnalysisPanel = ({
   closeLabel,
   showNegotiationLabel,
 }: AnalysisPanelProps) => {
+  const [isExpandedWidth, setIsExpandedWidth] = useState(false);
+
   return (
     <>
       {/* Mobile Overlay Background */}
@@ -59,23 +62,35 @@ export const AnalysisPanel = ({
       <aside
         className={`
         ${rightPanelOpen ? "flex" : "hidden"}
-        xl:flex w-[28rem] shrink-0 flex-col border-l border-white/10 bg-[#111111] h-full overflow-hidden
+        xl:flex ${isExpandedWidth ? "w-[36rem] 2xl:w-[42rem]" : "w-[28rem]"} shrink-0 flex-col border-l border-white/10 bg-[#111111] h-full overflow-hidden transition-all duration-300
         fixed xl:relative top-0 right-0 z-30 xl:z-auto
       `}
       >
         <div className="p-4 flex flex-col h-full overflow-hidden">
-          {/* Panel Header with Close Button */}
-          <div className="flex items-center justify-between mb-4 xl:hidden">
-            <h2 className="text-lg font-semibold text-white">
-              {analysisTitle}
+          {/* Panel Header */}
+          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-3">
+            <h2 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2">
+              <Flame className="h-4 w-4 text-purple-400" /> {analysisTitle}
             </h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setRightPanelOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsExpandedWidth(!isExpandedWidth)}
+                title={isExpandedWidth ? "Restore Standard Width" : "Expand Panel Width"}
+                className="h-7 w-7 text-white/60 hover:text-white hidden xl:flex"
+              >
+                {isExpandedWidth ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setRightPanelOpen(false)}
+                className="h-7 w-7 text-white/60 hover:text-white xl:hidden"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Scrollable content area */}

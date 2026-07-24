@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Menu, Plus, Upload, Search, FileText, MessageSquare, Trash2 } from "lucide-react";
+import { Menu, Plus, Upload, Search, FileText, MessageSquare, Trash2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { Document } from "@/hooks/useDocumentManagement";
 
@@ -52,21 +53,36 @@ export const Sidebar = ({
   searchPlaceholder,
   noDocumentsText,
 }: SidebarProps) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   return (
     <div
-      className={`fixed inset-y-0 left-0 z-30 w-72 bg-[#050505] border-r border-white/10 p-4 transition-transform duration-300 ${
+      className={`fixed inset-y-0 left-0 z-30 bg-[#050505] border-r border-white/10 p-4 transition-all duration-300 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      } md:translate-x-0 md:static md:w-80 flex flex-col h-full overflow-hidden`}
+      } md:translate-x-0 md:static ${
+        isCollapsed ? "md:w-20" : "md:w-80"
+      } flex flex-col h-full overflow-hidden`}
     >
       <div className="flex flex-col gap-4 flex-1 min-h-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              {appTitle}
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <LanguageSelector />
+          {!isCollapsed && (
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                {appTitle}
+              </h2>
+            </div>
+          )}
+          <div className={`flex items-center gap-1.5 ${isCollapsed ? "w-full justify-center" : ""}`}>
+            {!isCollapsed && <LanguageSelector />}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden md:flex text-white/60 hover:text-white h-8 w-8"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isCollapsed ? <PanelLeftOpen className="h-4 w-4 text-purple-400" /> : <PanelLeftClose className="h-4 w-4" />}
+            </Button>
             <Button
               variant="ghost"
               size="icon"
